@@ -156,6 +156,9 @@ func (o *AntigravityAuth) BuildAuthURL(state, redirectURI string) string {
 
 // ExchangeCodeForTokens exchanges authorization code for access and refresh tokens
 func (o *AntigravityAuth) ExchangeCodeForTokens(ctx context.Context, code, redirectURI string) (*TokenResponse, error) {
+	if strings.TrimSpace(ClientID) == "" || strings.TrimSpace(ClientSecret) == "" {
+		return nil, fmt.Errorf("antigravity oauth client is not configured; set ANTIGRAVITY_OAUTH_CLIENT_ID and ANTIGRAVITY_OAUTH_CLIENT_SECRET")
+	}
 	data := url.Values{}
 	data.Set("code", code)
 	data.Set("client_id", ClientID)

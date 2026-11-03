@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"net/url"
 	"strings"
 	"time"
@@ -21,11 +22,6 @@ import (
 )
 
 const defaultAPICallTimeout = 60 * time.Second
-
-const (
-	antigravityOAuthClientID     = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-	antigravityOAuthClientSecret = "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"
-)
 
 var antigravityOAuthTokenURL = "https://oauth2.googleapis.com/token"
 
@@ -553,9 +549,14 @@ func (h *Handler) refreshAntigravityOAuthAccessToken(ctx context.Context, auth *
 	if tokenURL == "" {
 		tokenURL = "https://oauth2.googleapis.com/token"
 	}
+	clientID := strings.TrimSpace(os.Getenv("ANTIGRAVITY_OAUTH_CLIENT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("ANTIGRAVITY_OAUTH_CLIENT_SECRET"))
+	if clientID == "" || clientSecret == "" {
+		return "", fmt.Errorf("antigravity oauth client is not configured")
+	}
 	form := url.Values{}
-	form.Set("client_id", antigravityOAuthClientID)
-	form.Set("client_secret", antigravityOAuthClientSecret)
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
 	form.Set("grant_type", "refresh_token")
 	form.Set("refresh_token", refreshToken)
 
