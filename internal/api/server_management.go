@@ -313,6 +313,21 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
+	if s.mgmt == nil || !s.mgmt.ValidSession(c, localManagementClient(c.ClientIP())) {
+		c.Header("Cache-Control", "no-store")
+		if c.Request.Method == http.MethodHead {
+			c.Status(http.StatusOK)
+			return
+		}
+		page, err := renderManagementLogin(c, "")
+		if err != nil {
+			log.WithError(err).Error("failed to render management login")
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", page)
+		return
+	}
 	filePath := managementasset.FilePath(s.configFilePath)
 	if strings.TrimSpace(filePath) == "" {
 		c.AbortWithStatus(http.StatusNotFound)
@@ -334,5 +349,18 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 		}
 	}
 
-	c.File(filePath)
+	body, err := os.ReadFile(filePath)
+	if err != nil {
+		log.WithError(err).Error("failed to read management control panel asset")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	page, err := insertPanelSessionPrelude(body)
+	if err != nil {
+		log.WithError(err).Error("failed to prepare management control panel")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, "text/html; charset=utf-8", page)
 }

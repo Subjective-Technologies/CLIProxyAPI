@@ -47,6 +47,8 @@ type Handler struct {
 	appliedReloadGeneration uint64
 	attemptsMu              sync.Mutex
 	failedAttempts          map[string]*attemptInfo // keyed by client IP
+	sessionsMu              sync.Mutex
+	sessions                map[string]managementSession
 	authManager             *coreauth.Manager
 	tokenStore              coreauth.Store
 	localPassword           string
@@ -77,6 +79,7 @@ func NewHandler(cfg *config.Config, configFilePath string, manager *coreauth.Man
 		cfg:                 cfg,
 		configFilePath:      configFilePath,
 		failedAttempts:      make(map[string]*attemptInfo),
+		sessions:            make(map[string]managementSession),
 		authManager:         manager,
 		tokenStore:          sdkAuth.GetTokenStore(),
 		allowRemoteOverride: envSecret != "",
@@ -261,8 +264,9 @@ func (h *Handler) SetPostAuthPersistHook(hook coreauth.PostAuthHook) {
 }
 
 // Middleware enforces access control for management endpoints.
-// All requests (local and remote) require a valid management key.
-// Additionally, remote access requires allow-remote-management=true.
+// A browser session from Sign in to CLIProxy is accepted. API callers send a
+// user id, a Firebase token, and the company name. The management key is not
+// accepted. Remote access requires allow-remote=true.
 func (h *Handler) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("X-CPA-VERSION", buildinfo.Version)
@@ -272,22 +276,12 @@ func (h *Handler) Middleware() gin.HandlerFunc {
 
 		clientIP := c.ClientIP()
 		localClient := clientIP == "127.0.0.1" || clientIP == "::1"
-
-		// Accept either Authorization: Bearer <key> or X-Management-Key
-		var provided string
-		if ah := c.GetHeader("Authorization"); ah != "" {
-			parts := strings.SplitN(ah, " ", 2)
-			if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
-				provided = parts[1]
-			} else {
-				provided = ah
-			}
-		}
-		if provided == "" {
-			provided = c.GetHeader("X-Management-Key")
+		if h.ValidSession(c, localClient) {
+			c.Next()
+			return
 		}
 
-		allowed, statusCode, errMsg := h.AuthenticateManagementKey(clientIP, localClient, provided)
+		allowed, statusCode, errMsg := h.AuthenticateFirebase(clientIP, localClient, c.GetHeader("X-User-Id"), c.GetHeader("X-Company-Name"), firebaseTokenFromRequest(c))
 		if !allowed {
 			c.AbortWithStatusJSON(statusCode, gin.H{"error": errMsg})
 			return

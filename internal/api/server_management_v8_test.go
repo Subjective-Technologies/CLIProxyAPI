@@ -49,7 +49,7 @@ func TestManagementV8RoutesShareAccessControl(t *testing.T) {
 				req := httptest.NewRequest(http.MethodGet, route, nil)
 				req.RemoteAddr = "127.0.0.1:1234"
 				if tc.authorized {
-					req.Header.Set("Authorization", "Bearer test-password")
+					attachManagementSession(t, h, req)
 				}
 				recorder := httptest.NewRecorder()
 				s.engine.ServeHTTP(recorder, req)
@@ -102,7 +102,7 @@ func TestManagementV8IndependentContract(t *testing.T) {
 		t.Helper()
 		req := httptest.NewRequest(method, url, strings.NewReader(body))
 		req.RemoteAddr = "127.0.0.1:1234"
-		req.Header.Set("Authorization", "Bearer test-password")
+		attachManagementSession(t, h, req)
 		response := httptest.NewRecorder()
 		s.engine.ServeHTTP(response, req)
 		if response.Code != status {
@@ -199,7 +199,7 @@ func TestManagementV8PluginOperationMigratesConfiguration(t *testing.T) {
 	s.registerManagementRoutes()
 	req := httptest.NewRequest(http.MethodDelete, "/v8/management/plugins/test-plugin", nil)
 	req.RemoteAddr = "127.0.0.1:1234"
-	req.Header.Set("Authorization", "Bearer test-password")
+	attachManagementSession(t, h, req)
 	response := httptest.NewRecorder()
 	s.engine.ServeHTTP(response, req)
 	if response.Code != http.StatusOK {

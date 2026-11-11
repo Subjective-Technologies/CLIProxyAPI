@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
@@ -66,7 +67,7 @@ func TestMiddlewareSetsSupportPluginHeader(t *testing.T) {
 		}
 	})
 
-	t.Run("valid key", func(t *testing.T) {
+	t.Run("management key is not accepted", func(t *testing.T) {
 		engine := gin.New()
 		engine.GET("/v0/management/config", middleware, func(c *gin.Context) {
 			c.Status(http.StatusOK)
@@ -78,8 +79,29 @@ func TestMiddlewareSetsSupportPluginHeader(t *testing.T) {
 		req.Header.Set("X-Management-Key", "test-secret")
 		engine.ServeHTTP(rec, req)
 
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("valid session", func(t *testing.T) {
+		engine := gin.New()
+		engine.GET("/v0/management/config", middleware, func(c *gin.Context) {
+			c.Status(http.StatusOK)
+		})
+		id, err := h.OpenSession("user-1", "acme", time.Now().Add(time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v0/management/config", nil)
+		req.RemoteAddr = "127.0.0.1:12345"
+		req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: id})
+		engine.ServeHTTP(rec, req)
+
 		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
 		}
 		if got := rec.Header().Get("X-CPA-SUPPORT-PLUGIN"); got != pluginhost.SupportPluginHeaderValue() {
 			t.Fatalf("X-CPA-SUPPORT-PLUGIN = %q, want %q", got, pluginhost.SupportPluginHeaderValue())

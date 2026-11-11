@@ -1673,7 +1673,7 @@ func TestManagementUsageRequiresManagementAuthAndPopsArray(t *testing.T) {
 	}
 
 	legacyReq := httptest.NewRequest(http.MethodGet, "/v0/management/usage?count=2", nil)
-	legacyReq.Header.Set("Authorization", "Bearer test-management-key")
+	attachManagementSession(t, server.mgmt, legacyReq)
 	legacyRR := httptest.NewRecorder()
 	server.engine.ServeHTTP(legacyRR, legacyReq)
 	if legacyRR.Code != http.StatusNotFound {
@@ -1681,7 +1681,7 @@ func TestManagementUsageRequiresManagementAuthAndPopsArray(t *testing.T) {
 	}
 
 	authReq := httptest.NewRequest(http.MethodGet, "/v0/management/usage-queue?count=2", nil)
-	authReq.Header.Set("Authorization", "Bearer test-management-key")
+	attachManagementSession(t, server.mgmt, authReq)
 	authRR := httptest.NewRecorder()
 	server.engine.ServeHTTP(authRR, authReq)
 	if authRR.Code != http.StatusOK {
@@ -1725,7 +1725,7 @@ func TestManagementPluginsRouteRegistered(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/v0/management/plugins", nil)
-	req.Header.Set("Authorization", "Bearer test-management-key")
+	attachManagementSession(t, server.mgmt, req)
 	rr := httptest.NewRecorder()
 	server.engine.ServeHTTP(rr, req)
 
@@ -1745,7 +1745,7 @@ func TestManagementPluginsRouteRegistered(t *testing.T) {
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/v0/management/plugins/sample/config", nil)
-	req.Header.Set("Authorization", "Bearer test-management-key")
+	attachManagementSession(t, server.mgmt, req)
 	rr = httptest.NewRecorder()
 	server.engine.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -1763,7 +1763,7 @@ func TestManagementPluginsRouteRegistered(t *testing.T) {
 	}
 
 	req = httptest.NewRequest(http.MethodDelete, "/v0/management/plugins/sample", nil)
-	req.Header.Set("Authorization", "Bearer test-management-key")
+	attachManagementSession(t, server.mgmt, req)
 	rr = httptest.NewRecorder()
 	server.engine.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -1898,8 +1898,11 @@ func TestExampleAPIKeySafeModeShowsWarningAndKeepsManagement(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d body=%s", rr.Code, http.StatusOK, rr.Body.String())
 		}
-		if !strings.Contains(rr.Body.String(), "management app") {
-			t.Fatalf("management panel body missing: %s", rr.Body.String())
+		if !strings.Contains(rr.Body.String(), "Sign in to CLIProxy") {
+			t.Fatalf("management panel did not ask for Firebase sign-in: %s", rr.Body.String())
+		}
+		if strings.Contains(rr.Body.String(), "management app") {
+			t.Fatalf("management panel was served before sign-in: %s", rr.Body.String())
 		}
 	})
 
@@ -1929,7 +1932,7 @@ func TestExampleAPIKeySafeModeShowsWarningAndKeepsManagement(t *testing.T) {
 
 	t.Run("management endpoints still work", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v0/management/config", nil)
-		req.Header.Set("Authorization", "Bearer test-management-key")
+		attachManagementSession(t, server.mgmt, req)
 		rr := httptest.NewRecorder()
 		server.engine.ServeHTTP(rr, req)
 		if rr.Code != http.StatusOK {
